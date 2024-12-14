@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -e
+
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run this script as root or using sudo."
+  exit 1
+fi
+
+echo "Updating package lists..."
+apt update
+
+deferred_packages=$(apt upgrade 2>/dev/null | grep "The following upgrades have been deferred" -A 1 | tail -n 1)
+
+if [ -z "$deferred_packages" ]; then
+  echo "No deferred packages found."
+  exit 0
+fi
+
+read -ra packages <<<"$deferred_packages"
+
+echo "The following deferred packages will be installed:"
+printf '%s\n' "${packages[@]}"
+
+echo "Installing deferred packages: ${packages[*]}..."
+apt-get --with-new-pkgs upgrade -y "${packages[@]}"
+echo "Deferred packages installation complete."
