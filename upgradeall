@@ -2,26 +2,36 @@
 
 set -e
 
+RED='\e[31m'
+GREEN='\e[32m'
+YELLOW='\e[33m'
+BLUE='\e[34m'
+RESET='\e[0m'
+
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run this script as root or using sudo."
+  echo -e "${RED}Please run this script as root or using sudo.${RESET}"
   exit 1
 fi
 
-echo "Updating package lists..."
+echo -e "${BLUE}Updating package lists...${RESET}"
 apt update
 
-deferred_packages=$(apt upgrade 2>/dev/null | grep "The following upgrades have been deferred" -A 1 | tail -n 1)
+deferred_packages=$(apt upgrade 2>/dev/null | awk '
+  /The following upgrades have been deferred/ {flag=1; next}
+  flag && /^[0-9]+ upgraded,/ {flag=0}  # Stop at summary line like "0 upgraded, 0 newly installed..."
+  flag {print}
+')
+
+deferred_packages=$(echo "$deferred_packages" | tr '\n' ' ' | sed 's/  */ /g')
 
 if [ -z "$deferred_packages" ]; then
-  echo "No deferred packages found."
+  echo -e "${GREEN}No deferred packages found.${RESET}"
   exit 0
 fi
 
-read -ra packages <<<"$deferred_packages"
+echo -e "${YELLOW}The following deferred packages will be installed:${RESET}"
+echo -e "${YELLOW}$deferred_packages${RESET}"
 
-echo "The following deferred packages will be installed:"
-printf '%s\n' "${packages[@]}"
-
-echo "Installing deferred packages: ${packages[*]}..."
-apt-get --with-new-pkgs upgrade -y "${packages[@]}"
-echo "Deferred packages installation complete."
+echo -e "${BLUE}Installing deferred packages: $deferred_packages...${RESET}"
+apt-get --with-new-pkgs upgrade -y $deferred_packages
+echo -e "${GREEN}Deferred packages installation complete.${RESET}"
